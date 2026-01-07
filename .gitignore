@@ -1,0 +1,39 @@
+# Build artifacts
+build/
+
+# Compiled object files
+*.o
+*.obj
+
+# Compiled executables
+*.exe
+*.out
+
+# WASM artifacts
+*.wasm
+*.js.mem
+
+# Editor and IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Emscripten cache
+.emscripten_cache/
+.emscripten_ports/
+
+# Python cache (for local server)
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
