@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task 05 - Integration Tests</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .test {
+            margin: 15px 0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+        }
+        .pass {
+            background: #d4edda;
+            color: #155724;
+            border-left: 5px solid #28a745;
+        }
+        .fail {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 5px solid #dc3545;
+        }
+        .summary {
+            margin-top: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>Task 05: JSON Parser - Integration Tests</h1>
+    <div id="results"></div>
+    <div class="summary" id="summary"></div>
+
+    <script>
+        const results = document.getElementById('results');
+        const summary = document.getElementById('summary');
+        let passCount = 0;
+        let failCount = 0;
+
+        function addTest(name, passed, message) {
+            const div = document.createElement('div');
+            div.className = `test ${passed ? 'pass' : 'fail'}`;
+            div.textContent = `${passed ? '✓' : '✗'} ${name}: ${message}`;
+            results.appendChild(div);
+
+            if (passed) passCount++;
+            else failCount++;
+        }
+
+        function showSummary() {
+            const total = passCount + failCount;
+            summary.innerHTML = `
+                <h2>Test Summary</h2>
+                <p><strong>Total:</strong> ${total}</p>
+                <p><strong>Passed:</strong> ${passCount}</p>
+                <p><strong>Failed:</strong> ${failCount}</p>
+                <p><strong>Status:</strong> ${failCount === 0 ? '✓ ALL TESTS PASSED!' : '✗ SOME TESTS FAILED'}</p>
+            `;
+            summary.style.background = failCount === 0 ? '#d4edda' : '#f8d7da';
+        }
+
+        // Load WASM module
+        const script = document.createElement('script');
+        script.src = '../../build/wasm/json_parser.js';
+        script.onerror = () => {
+            addTest('WASM Load', false, 'Module not found - run "make build-wasm-task05" first');
+            showSummary();
+        };
+        script.onload = () => {
+            JsonModule().then(Module => {
+                addTest('WASM Load', true, 'Module loaded successfully');
+
+                try {
+                    // Test: Functions are exported
+                    if (typeof Module._parse_json_int === 'function') {
+                        addTest('Function Export', true, 'parse_json_int() is exported');
+                    } else {
+                        addTest('Function Export', false, 'parse_json_int() not found');
+                    }
+
+                    if (typeof Module._parse_json_string === 'function') {
+                        addTest('Function Export', true, 'parse_json_string() is exported');
+                    } else {
+                        addTest('Function Export', false, 'parse_json_string() not found');
+                    }
+
+                    if (typeof Module._is_valid_json === 'function') {
+                        addTest('Function Export', true, 'is_valid_json() is exported');
+                    } else {
+                        addTest('Function Export', false, 'is_valid_json() not found');
+                    }
+
+                    // Test: parse_json_int with simple JSON
+                    const json1 = '{"age": 25}';
+                    const jsonPtr1 = Module.stringToUTF8OnStack(json1);
+                    const keyPtr1 = Module.stringToUTF8OnStack("age");
+                    const result1 = Module._parse_json_int(jsonPtr1, keyPtr1);
+                    addTest('parse_json_int("age": 25)', result1 === 25, `Expected 25, got ${result1}`);
+
+                    // Test: parse_json_int with multiple keys
+                    const json2 = '{"age": 30, "score": 95}';
+                    const jsonPtr2 = Module.stringToUTF8OnStack(json2);
+                    const keyPtr2a = Module.stringToUTF8OnStack("age");
+                    const keyPtr2b = Module.stringToUTF8OnStack("score");
+                    const age = Module._parse_json_int(jsonPtr2, keyPtr2a);
+                    const score = Module._parse_json_int(jsonPtr2, keyPtr2b);
+                    const multipleKeys = age === 30 && score === 95;
+                    addTest('parse_json_int multiple keys', multipleKeys,
+                        multipleKeys ? 'Parsed age=30, score=95' : `age=${age}, score=${score}`);
+
+                    // Test: parse_json_int missing key
+                    const json3 = '{"age": 25}';
+                    const jsonPtr3 = Module.stringToUTF8OnStack(json3);
+                    const keyPtr3 = Module.stringToUTF8OnStack("missing");
+                    const result3 = Module._parse_json_int(jsonPtr3, keyPtr3);
+                    addTest('parse_json_int missing key', result3 === -1, `Expected -1, got ${result3}`);
+
+                    // Test: parse_json_string
+                    const json4 = '{"name": "John"}';
+                    const jsonPtr4 = Module.stringToUTF8OnStack(json4);
+                    const keyPtr4 = Module.stringToUTF8OnStack("name");
+                    const resultPtr4 = Module._parse_json_string(jsonPtr4, keyPtr4);
+                    const result4 = resultPtr4 !== 0 ? Module.UTF8ToString(resultPtr4) : null;
+                    addTest('parse_json_string("name": "John")', result4 === "John",
+                        result4 === "John" ? 'Parsed "John"' : `Got "${result4}"`);
+
+                    // Test: parse_json_string multiple
+                    const json5 = '{"name": "Alice", "city": "Portland"}';
+                    const jsonPtr5 = Module.stringToUTF8OnStack(json5);
+                    const keyPtr5a = Module.stringToUTF8OnStack("name");
+                    const keyPtr5b = Module.stringToUTF8OnStack("city");
+                    const namePtr = Module._parse_json_string(jsonPtr5, keyPtr5a);
+                    const cityPtr = Module._parse_json_string(jsonPtr5, keyPtr5b);
+                    const name = namePtr !== 0 ? Module.UTF8ToString(namePtr) : null;
+                    const city = cityPtr !== 0 ? Module.UTF8ToString(cityPtr) : null;
+                    const multipleStr = name === "Alice" && city === "Portland";
+                    addTest('parse_json_string multiple', multipleStr,
+                        multipleStr ? 'Parsed name="Alice", city="Portland"' : `name="${name}", city="${city}"`);
+
+                    // Test: parse_json_string missing key
+                    const json6 = '{"name": "Bob"}';
+                    const jsonPtr6 = Module.stringToUTF8OnStack(json6);
+                    const keyPtr6 = Module.stringToUTF8OnStack("missing");
+                    const resultPtr6 = Module._parse_json_string(jsonPtr6, keyPtr6);
+                    addTest('parse_json_string missing key', resultPtr6 === 0, `Expected nullptr, got ${resultPtr6}`);
+
+                    // Test: is_valid_json with valid JSON
+                    const json7 = '{"name": "Test", "age": 25}';
+                    const jsonPtr7 = Module.stringToUTF8OnStack(json7);
+                    const valid1 = Module._is_valid_json(jsonPtr7);
+                    addTest('is_valid_json valid', valid1 === true, `Expected true, got ${valid1}`);
+
+                    // Test: is_valid_json with invalid JSON
+                    const json8 = '{"name": "Test"';
+                    const jsonPtr8 = Module.stringToUTF8OnStack(json8);
+                    const valid2 = Module._is_valid_json(jsonPtr8);
+                    addTest('is_valid_json invalid', valid2 === false, `Expected false, got ${valid2}`);
+
+                    // Test: is_valid_json empty object
+                    const json9 = '{}';
+                    const jsonPtr9 = Module.stringToUTF8OnStack(json9);
+                    const valid3 = Module._is_valid_json(jsonPtr9);
+                    addTest('is_valid_json empty', valid3 === true, `Expected true, got ${valid3}`);
+
+                    // Test: Mixed types
+                    const json10 = '{"name": "Alice", "age": 30, "city": "NYC"}';
+                    const jsonPtr10 = Module.stringToUTF8OnStack(json10);
+                    const nameKey = Module.stringToUTF8OnStack("name");
+                    const ageKey = Module.stringToUTF8OnStack("age");
+                    const cityKey = Module.stringToUTF8OnStack("city");
+
+                    const mixedName = Module.UTF8ToString(Module._parse_json_string(jsonPtr10, nameKey));
+                    const mixedAge = Module._parse_json_int(jsonPtr10, ageKey);
+                    const mixedCity = Module.UTF8ToString(Module._parse_json_string(jsonPtr10, cityKey));
+
+                    const mixedCorrect = mixedName === "Alice" && mixedAge === 30 && mixedCity === "NYC";
+                    addTest('Mixed types', mixedCorrect,
+                        mixedCorrect ? 'Parsed mixed types correctly' :
+                        `name="${mixedName}", age=${mixedAge}, city="${mixedCity}"`);
+
+                    showSummary();
+                } catch (error) {
+                    addTest('Test Execution', false, `Error: ${error.message}`);
+                    showSummary();
+                }
+            }).catch(error => {
+                addTest('WASM Initialization', false, `Failed to initialize: ${error.message}`);
+                showSummary();
+            });
+        };
+        document.head.appendChild(script);
+    </script>
+</body>
+</html>

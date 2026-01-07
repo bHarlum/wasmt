@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task 01 - Integration Tests</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .test {
+            margin: 15px 0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+        }
+        .pass {
+            background: #d4edda;
+            color: #155724;
+            border-left: 5px solid #28a745;
+        }
+        .fail {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 5px solid #dc3545;
+        }
+        .summary {
+            margin-top: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>Task 01: Basic Functions - Integration Tests</h1>
+    <div id="results"></div>
+    <div class="summary" id="summary"></div>
+
+    <script>
+        const results = document.getElementById('results');
+        const summary = document.getElementById('summary');
+        let passCount = 0;
+        let failCount = 0;
+
+        function addTest(name, passed, message) {
+            const div = document.createElement('div');
+            div.className = `test ${passed ? 'pass' : 'fail'}`;
+            div.textContent = `${passed ? '✓' : '✗'} ${name}: ${message}`;
+            results.appendChild(div);
+
+            if (passed) passCount++;
+            else failCount++;
+        }
+
+        function showSummary() {
+            const total = passCount + failCount;
+            summary.innerHTML = `
+                <h2>Test Summary</h2>
+                <p><strong>Total:</strong> ${total}</p>
+                <p><strong>Passed:</strong> ${passCount}</p>
+                <p><strong>Failed:</strong> ${failCount}</p>
+                <p><strong>Status:</strong> ${failCount === 0 ? '✓ ALL TESTS PASSED!' : '✗ SOME TESTS FAILED'}</p>
+            `;
+            summary.style.background = failCount === 0 ? '#d4edda' : '#f8d7da';
+        }
+
+        // Load WASM module
+        const script = document.createElement('script');
+        script.src = '../../build/wasm/math_ops.js';
+        script.onerror = () => {
+            addTest('WASM Load', false, 'Module not found - run "make build-wasm-task01" first');
+            showSummary();
+        };
+        script.onload = () => {
+            MathModule().then(Module => {
+                addTest('WASM Load', true, 'Module loaded successfully');
+
+                try {
+                    // Test: add function exists
+                    if (typeof Module._add === 'function') {
+                        addTest('Function Export', true, 'add() function is exported');
+                    } else {
+                        addTest('Function Export', false, 'add() function not found');
+                        showSummary();
+                        return;
+                    }
+
+                    // Test: add(5, 7) = 12
+                    const result1 = Module._add(5, 7);
+                    addTest('add(5, 7)', result1 === 12, `Expected 12, got ${result1}`);
+
+                    // Test: add(2, 3) = 5
+                    const result2 = Module._add(2, 3);
+                    addTest('add(2, 3)', result2 === 5, `Expected 5, got ${result2}`);
+
+                    // Test: add(-1, 1) = 0
+                    const result3 = Module._add(-1, 1);
+                    addTest('add(-1, 1)', result3 === 0, `Expected 0, got ${result3}`);
+
+                    // Test: add(100, 200) = 300
+                    const result4 = Module._add(100, 200);
+                    addTest('add(100, 200)', result4 === 300, `Expected 300, got ${result4}`);
+
+                    // Test: add with negative result
+                    const result5 = Module._add(-10, -5);
+                    addTest('add(-10, -5)', result5 === -15, `Expected -15, got ${result5}`);
+
+                    showSummary();
+                } catch (error) {
+                    addTest('Test Execution', false, `Error: ${error.message}`);
+                    showSummary();
+                }
+            }).catch(error => {
+                addTest('WASM Initialization', false, `Failed to initialize: ${error.message}`);
+                showSummary();
+            });
+        };
+        document.head.appendChild(script);
+    </script>
+</body>
+</html>

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task 02 - Integration Tests</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .test {
+            margin: 15px 0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+        }
+        .pass {
+            background: #d4edda;
+            color: #155724;
+            border-left: 5px solid #28a745;
+        }
+        .fail {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 5px solid #dc3545;
+        }
+        .summary {
+            margin-top: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>Task 02: Strings - Integration Tests</h1>
+    <div id="results"></div>
+    <div class="summary" id="summary"></div>
+
+    <script>
+        const results = document.getElementById('results');
+        const summary = document.getElementById('summary');
+        let passCount = 0;
+        let failCount = 0;
+
+        function addTest(name, passed, message) {
+            const div = document.createElement('div');
+            div.className = `test ${passed ? 'pass' : 'fail'}`;
+            div.textContent = `${passed ? '✓' : '✗'} ${name}: ${message}`;
+            results.appendChild(div);
+
+            if (passed) passCount++;
+            else failCount++;
+        }
+
+        function showSummary() {
+            const total = passCount + failCount;
+            summary.innerHTML = `
+                <h2>Test Summary</h2>
+                <p><strong>Total:</strong> ${total}</p>
+                <p><strong>Passed:</strong> ${passCount}</p>
+                <p><strong>Failed:</strong> ${failCount}</p>
+                <p><strong>Status:</strong> ${failCount === 0 ? '✓ ALL TESTS PASSED!' : '✗ SOME TESTS FAILED'}</p>
+            `;
+            summary.style.background = failCount === 0 ? '#d4edda' : '#f8d7da';
+        }
+
+        // Load WASM module
+        const script = document.createElement('script');
+        script.src = '../../build/wasm/string_ops.js';
+        script.onerror = () => {
+            addTest('WASM Load', false, 'Module not found - run "make build-wasm-task02" first');
+            showSummary();
+        };
+        script.onload = () => {
+            StringModule().then(Module => {
+                addTest('WASM Load', true, 'Module loaded successfully');
+
+                try {
+                    // Test: greet function exists
+                    if (typeof Module._greet === 'function') {
+                        addTest('Function Export', true, 'greet() function is exported');
+                    } else {
+                        addTest('Function Export', false, 'greet() function not found');
+                    }
+
+                    // Test: get_greeting_length function exists
+                    if (typeof Module._get_greeting_length === 'function') {
+                        addTest('Function Export', true, 'get_greeting_length() function is exported');
+                    } else {
+                        addTest('Function Export', false, 'get_greeting_length() function not found');
+                    }
+
+                    // Test: greet("World")
+                    const namePtr1 = Module.stringToUTF8OnStack("World");
+                    const resultPtr1 = Module._greet(namePtr1);
+                    const result1 = Module.UTF8ToString(resultPtr1);
+                    addTest('greet("World")', result1 === "Hello, World!", `Expected "Hello, World!", got "${result1}"`);
+
+                    // Test: greet("JavaScript")
+                    const namePtr2 = Module.stringToUTF8OnStack("JavaScript");
+                    const resultPtr2 = Module._greet(namePtr2);
+                    const result2 = Module.UTF8ToString(resultPtr2);
+                    addTest('greet("JavaScript")', result2 === "Hello, JavaScript!", `Expected "Hello, JavaScript!", got "${result2}"`);
+
+                    // Test: greet("Bryce")
+                    const namePtr3 = Module.stringToUTF8OnStack("Bryce");
+                    const resultPtr3 = Module._greet(namePtr3);
+                    const result3 = Module.UTF8ToString(resultPtr3);
+                    addTest('greet("Bryce")', result3 === "Hello, Bryce!", `Expected "Hello, Bryce!", got "${result3}"`);
+
+                    // Test: get_greeting_length("Test")
+                    const namePtr4 = Module.stringToUTF8OnStack("Test");
+                    const length1 = Module._get_greeting_length(namePtr4);
+                    addTest('get_greeting_length("Test")', length1 === 12, `Expected 12, got ${length1}`);
+
+                    // Test: get_greeting_length("Alice")
+                    const namePtr5 = Module.stringToUTF8OnStack("Alice");
+                    const length2 = Module._get_greeting_length(namePtr5);
+                    addTest('get_greeting_length("Alice")', length2 === 13, `Expected 13, got ${length2}`);
+
+                    // Test: get_greeting_length("")
+                    const namePtr6 = Module.stringToUTF8OnStack("");
+                    const length3 = Module._get_greeting_length(namePtr6);
+                    addTest('get_greeting_length("")', length3 === 8, `Expected 8, got ${length3}`);
+
+                    showSummary();
+                } catch (error) {
+                    addTest('Test Execution', false, `Error: ${error.message}`);
+                    showSummary();
+                }
+            }).catch(error => {
+                addTest('WASM Initialization', false, `Failed to initialize: ${error.message}`);
+                showSummary();
+            });
+        };
+        document.head.appendChild(script);
+    </script>
+</body>
+</html>

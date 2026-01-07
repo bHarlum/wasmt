@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task 04 - Integration Tests</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .test {
+            margin: 15px 0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+        }
+        .pass {
+            background: #d4edda;
+            color: #155724;
+            border-left: 5px solid #28a745;
+        }
+        .fail {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 5px solid #dc3545;
+        }
+        .summary {
+            margin-top: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>Task 04: Classes and OOP - Integration Tests</h1>
+    <div id="results"></div>
+    <div class="summary" id="summary"></div>
+
+    <script>
+        const results = document.getElementById('results');
+        const summary = document.getElementById('summary');
+        let passCount = 0;
+        let failCount = 0;
+
+        function addTest(name, passed, message) {
+            const div = document.createElement('div');
+            div.className = `test ${passed ? 'pass' : 'fail'}`;
+            div.textContent = `${passed ? '✓' : '✗'} ${name}: ${message}`;
+            results.appendChild(div);
+
+            if (passed) passCount++;
+            else failCount++;
+        }
+
+        function showSummary() {
+            const total = passCount + failCount;
+            summary.innerHTML = `
+                <h2>Test Summary</h2>
+                <p><strong>Total:</strong> ${total}</p>
+                <p><strong>Passed:</strong> ${passCount}</p>
+                <p><strong>Failed:</strong> ${failCount}</p>
+                <p><strong>Status:</strong> ${failCount === 0 ? '✓ ALL TESTS PASSED!' : '✗ SOME TESTS FAILED'}</p>
+            `;
+            summary.style.background = failCount === 0 ? '#d4edda' : '#f8d7da';
+        }
+
+        // Load WASM module
+        const script = document.createElement('script');
+        script.src = '../../build/wasm/counter.js';
+        script.onerror = () => {
+            addTest('WASM Load', false, 'Module not found - run "make build-wasm-task04" first');
+            showSummary();
+        };
+        script.onload = () => {
+            CounterModule().then(Module => {
+                addTest('WASM Load', true, 'Module loaded successfully');
+
+                try {
+                    // Test: Counter class is exported
+                    if (typeof Module.Counter === 'function') {
+                        addTest('Class Export', true, 'Counter class is exported');
+                    } else {
+                        addTest('Class Export', false, 'Counter class not found');
+                        showSummary();
+                        return;
+                    }
+
+                    // Test: Can create Counter instance
+                    const counter1 = new Module.Counter(10);
+                    addTest('Constructor', counter1 !== null, 'Can create Counter instance');
+
+                    // Test: Initial value is correct
+                    const val1 = counter1.getValue();
+                    addTest('Initial Value', val1 === 10, `Expected 10, got ${val1}`);
+
+                    // Test: increment() works
+                    counter1.increment();
+                    const val2 = counter1.getValue();
+                    addTest('increment()', val2 === 11, `Expected 11, got ${val2}`);
+
+                    // Test: Multiple increments
+                    counter1.increment();
+                    counter1.increment();
+                    const val3 = counter1.getValue();
+                    addTest('Multiple increments', val3 === 13, `Expected 13, got ${val3}`);
+
+                    // Test: decrement() works
+                    counter1.decrement();
+                    const val4 = counter1.getValue();
+                    addTest('decrement()', val4 === 12, `Expected 12, got ${val4}`);
+
+                    // Test: reset() works
+                    counter1.reset();
+                    const val5 = counter1.getValue();
+                    addTest('reset()', val5 === 0, `Expected 0, got ${val5}`);
+
+                    // Test: Multiple instances maintain separate state
+                    const counter2 = new Module.Counter(20);
+                    counter1.increment();
+                    counter2.decrement();
+
+                    const c1val = counter1.getValue();
+                    const c2val = counter2.getValue();
+                    const separateState = c1val === 1 && c2val === 19;
+                    addTest('Separate instances', separateState,
+                        separateState ? 'Instances maintain separate state' : `counter1=${c1val}, counter2=${c2val}`);
+
+                    // Test: Negative values work
+                    counter1.reset();
+                    counter1.decrement();
+                    counter1.decrement();
+                    const negVal = counter1.getValue();
+                    addTest('Negative values', negVal === -2, `Expected -2, got ${negVal}`);
+
+                    // Test: Chain operations
+                    const counter3 = new Module.Counter(5);
+                    counter3.increment();
+                    counter3.increment();
+                    counter3.decrement();
+                    const chainVal = counter3.getValue();
+                    addTest('Chain operations', chainVal === 6, `Expected 6, got ${chainVal}`);
+
+                    // Clean up (if delete is available)
+                    counter1.delete();
+                    counter2.delete();
+                    counter3.delete();
+
+                    showSummary();
+                } catch (error) {
+                    addTest('Test Execution', false, `Error: ${error.message}`);
+                    showSummary();
+                }
+            }).catch(error => {
+                addTest('WASM Initialization', false, `Failed to initialize: ${error.message}`);
+                showSummary();
+            });
+        };
+        document.head.appendChild(script);
+    </script>
+</body>
+</html>

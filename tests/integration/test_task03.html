@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task 03 - Integration Tests</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .test {
+            margin: 15px 0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+        }
+        .pass {
+            background: #d4edda;
+            color: #155724;
+            border-left: 5px solid #28a745;
+        }
+        .fail {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 5px solid #dc3545;
+        }
+        .summary {
+            margin-top: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>Task 03: Arrays and Memory - Integration Tests</h1>
+    <div id="results"></div>
+    <div class="summary" id="summary"></div>
+
+    <script>
+        const results = document.getElementById('results');
+        const summary = document.getElementById('summary');
+        let passCount = 0;
+        let failCount = 0;
+
+        function addTest(name, passed, message) {
+            const div = document.createElement('div');
+            div.className = `test ${passed ? 'pass' : 'fail'}`;
+            div.textContent = `${passed ? '✓' : '✗'} ${name}: ${message}`;
+            results.appendChild(div);
+
+            if (passed) passCount++;
+            else failCount++;
+        }
+
+        function showSummary() {
+            const total = passCount + failCount;
+            summary.innerHTML = `
+                <h2>Test Summary</h2>
+                <p><strong>Total:</strong> ${total}</p>
+                <p><strong>Passed:</strong> ${passCount}</p>
+                <p><strong>Failed:</strong> ${failCount}</p>
+                <p><strong>Status:</strong> ${failCount === 0 ? '✓ ALL TESTS PASSED!' : '✗ SOME TESTS FAILED'}</p>
+            `;
+            summary.style.background = failCount === 0 ? '#d4edda' : '#f8d7da';
+        }
+
+        // Load WASM module
+        const script = document.createElement('script');
+        script.src = '../../build/wasm/array_ops.js';
+        script.onerror = () => {
+            addTest('WASM Load', false, 'Module not found - run "make build-wasm-task03" first');
+            showSummary();
+        };
+        script.onload = () => {
+            ArrayModule().then(Module => {
+                addTest('WASM Load', true, 'Module loaded successfully');
+
+                try {
+                    // Test: Functions are exported
+                    if (typeof Module._sum_array === 'function') {
+                        addTest('Function Export', true, 'sum_array() is exported');
+                    } else {
+                        addTest('Function Export', false, 'sum_array() not found');
+                    }
+
+                    if (typeof Module._multiply_array === 'function') {
+                        addTest('Function Export', true, 'multiply_array() is exported');
+                    } else {
+                        addTest('Function Export', false, 'multiply_array() not found');
+                    }
+
+                    if (typeof Module._create_sequence === 'function') {
+                        addTest('Function Export', true, 'create_sequence() is exported');
+                    } else {
+                        addTest('Function Export', false, 'create_sequence() not found');
+                    }
+
+                    // Test: sum_array with JS array
+                    const arr1 = new Int32Array([1, 2, 3, 4, 5]);
+                    const ptr1 = Module._malloc(arr1.length * 4);
+                    Module.HEAP32.set(arr1, ptr1 / 4);
+                    const sum1 = Module._sum_array(ptr1, arr1.length);
+                    Module._free(ptr1);
+                    addTest('sum_array([1,2,3,4,5])', sum1 === 15, `Expected 15, got ${sum1}`);
+
+                    // Test: sum_array with different values
+                    const arr2 = new Int32Array([10, 20, 30]);
+                    const ptr2 = Module._malloc(arr2.length * 4);
+                    Module.HEAP32.set(arr2, ptr2 / 4);
+                    const sum2 = Module._sum_array(ptr2, arr2.length);
+                    Module._free(ptr2);
+                    addTest('sum_array([10,20,30])', sum2 === 60, `Expected 60, got ${sum2}`);
+
+                    // Test: multiply_array in-place
+                    const arr3 = new Int32Array([2, 4, 6]);
+                    const ptr3 = Module._malloc(arr3.length * 4);
+                    Module.HEAP32.set(arr3, ptr3 / 4);
+                    Module._multiply_array(ptr3, arr3.length, 2);
+                    const result3 = new Int32Array(Module.HEAP32.buffer, ptr3, arr3.length);
+                    const multiplied = result3[0] === 4 && result3[1] === 8 && result3[2] === 12;
+                    Module._free(ptr3);
+                    addTest('multiply_array([2,4,6], 2)', multiplied,
+                        multiplied ? 'Array correctly modified to [4,8,12]' : `Got [${result3[0]},${result3[1]},${result3[2]}]`);
+
+                    // Test: create_sequence
+                    const ptr4 = Module._create_sequence(5);
+                    const seq = new Int32Array(Module.HEAP32.buffer, ptr4, 5);
+                    const seqCorrect = seq[0] === 0 && seq[1] === 1 && seq[2] === 2 && seq[3] === 3 && seq[4] === 4;
+                    addTest('create_sequence(5)', seqCorrect,
+                        seqCorrect ? 'Created [0,1,2,3,4]' : `Got [${seq[0]},${seq[1]},${seq[2]},${seq[3]},${seq[4]}]`);
+                    Module._free(ptr4);
+
+                    // Test: create_sequence with different length
+                    const ptr5 = Module._create_sequence(3);
+                    const seq2 = new Int32Array(Module.HEAP32.buffer, ptr5, 3);
+                    const seq2Correct = seq2[0] === 0 && seq2[1] === 1 && seq2[2] === 2;
+                    addTest('create_sequence(3)', seq2Correct,
+                        seq2Correct ? 'Created [0,1,2]' : `Got [${seq2[0]},${seq2[1]},${seq2[2]}]`);
+                    Module._free(ptr5);
+
+                    showSummary();
+                } catch (error) {
+                    addTest('Test Execution', false, `Error: ${error.message}`);
+                    showSummary();
+                }
+            }).catch(error => {
+                addTest('WASM Initialization', false, `Failed to initialize: ${error.message}`);
+                showSummary();
+            });
+        };
+        document.head.appendChild(script);
+    </script>
+</body>
+</html>
